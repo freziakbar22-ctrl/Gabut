@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Gaji Dashboard v8.1 (Fixed Print)</title>
+<style>
+  :root{
+    --primary:#0f766e;
+    --primary-light:#14b8a6;
+    --bg:#f3f4f6;
+    --card:#ffffff;
+    --text:#1f2937;
+    --border:#e5e7eb;
+    --holiday:#fee2e2;
+    --hadir:#dcfce7;
+    --half:#fef9c3;
+    --absen:#f3f4f6;
+    --danger:#ef4444;
+  }
+  body{font-family:'Segoe UI',sans-serif;background:var(--bg);margin:0;color:var(--text);-webkit-font-smoothing:antialiased}
+
+  /* --- APP UI WRAPPER --- */
+  /* Kita bungkus semua UI aplikasi agar mudah disembunyikan saat print */
+  #app-ui { display: block; }
+
+  header{background:var(--primary);color:#fff;padding:14px 16px;box-shadow:0 2px 4px rgba(0,0,0,0.1)}
+  .header-content{max-width:1000px;margin:0 auto;display:flex;justify-content:space-between;align-items:center}
+  h1{margin:0;font-size:1.2rem}
+  
+  .wrap{max-width:1000px;margin:20px auto;padding:0 12px; display:grid; grid-template-columns: 2fr 1fr; gap:16px}
+  
+  .box{background:var(--card);padding:16px;border-radius:12px;border:1px solid var(--border);margin-bottom:16px;box-shadow:0 1px 2px rgba(0,0,0,0.05)}
+  
+  /* Calendar Styles */
+  .calendar-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .day-name{text-align:center;font-weight:bold;font-size:0.85rem;color:var(--primary);padding:4px}
+  .cell{background:#fafafa;border:1px solid #eee;border-radius:6px;min-height:65px;padding:4px;cursor:pointer;position:relative}
+  .cell:hover{border-color:var(--primary-light)}
+  .cell.today{border:2px solid #3b82f6}
+  .d-num{font-weight:700;font-size:0.9rem}
+  .tag{font-size:0.7rem;padding:2px 4px;border-radius:4px;margin-top:2px;display:inline-block}
+  
+  /* Status Colors */
+  .bg-hadir{background:var(--hadir)}
+  .bg-half{background:var(--half)}
+  .bg-libur{background:var(--holiday)}
+  .bg-absen{background:var(--absen);color:#aaa}
+
+  /* Inputs */
+  input, select{width:100%;padding:8px;border:1px solid #ccc;border-radius:6px;box-sizing:border-box;margin:4px 0}
+  .btn{background:var(--primary);color:#fff;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
+  .btn:hover{background:var(--primary-light)}
+  .btn-danger{background:var(--danger)}
+  .btn-outline{background:transparent;border:1px solid var(--primary);color:var(--primary)}
+
+  /* Summary Table */
+  table.simple{width:100%;border-collapse:collapse}
+  table.simple th, table.simple td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+  table.simple .money{text-align:right;font-family:monospace;font-size:1rem}
+  .total-row{font-weight:bold;background:#f9fafb}
+  
+  /* Extra Items List */
+  .extra-item{display:flex;justify-content:space-between;align-items:center;background:#f9fafb;padding:6px;border-radius:6px;margin-bottom:4px;font-size:0.9rem}
+  .amount-plus{color:green;font-weight:bold}
+  .amount-min{color:red;font-weight:bold}
+
+  @media(max-width:768px){ .wrap{grid-template-columns:1fr} }
+
+  /* Modal */
+  .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);justify-content:center;align-items:center;z-index:99}
+  .modal-box{background:#fff;padding:20px;border-radius:10px;width:350px;max-width:90%}
+
+  /* --- PRINT LAYOUT (Penting!) --- */
+  #print-area { display:none; } /* Sembunyi di layar biasa */
+
+  @media print {
+    /* Sembunyikan semua UI Aplikasi */
+    #app-ui, .modal { display: none !important; }
+    body { background: #fff !important; margin: 0 !important; padding: 0 !important; }
+
+    /* Munculkan Area Print */
+    #print-area { 
+      display: block !important; 
+      position: relative !important; 
+      width: 100% !important; 
+      margin: 0 !important;
+      padding: 20px !important;
+      color: #000 !important;
+      font-family: 'Times New Roman', serif; /* Font resmi surat */
+    }
+    
+    /* Styling Slip Gaji Agar Rapi di Kertas */
+    .slip-container { border: 1px solid #000; padding: 20px; max-width: 100%; }
+    .slip-header { text-align:center; border-bottom:2px double #000; padding-bottom:10px; margin-bottom:20px; }
+    .slip-header h2 { margin:0; text-transform: uppercase; font-size: 18pt; }
+    .slip-meta { display:flex; justify-content:space-between; margin-bottom:20px; }
+    .slip-table { width:100%; border-collapse:collapse; margin-bottom:30px; border: 1px solid #000; }
+    .slip-table th { background: #eee !important; font-weight:bold; border:1px solid #000; padding:8px; -webkit-print-color-adjust: exact; }
+    .slip-table td { border:1px solid #000; padding:8px; }
+    .slip-footer { display:flex; justify-content:space-between; margin-top:50px; }
+    .sign-box { text-align:center; min-width:150px; }
+    .sign-space { height: 70px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- WRAPPER UNTUK TAMPILAN APLIKASI -->
+<div id="app-ui">
+  <header>
+    <div class="header-content">
+      <h1>💰 Gaji Dashboard v8.1</h1>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline" style="color:#fff;border-color:#fff" onclick="printSlip()">🖨️ Cetak Slip</button>
+        <button class="btn" style="background:#fff;color:var(--primary)" onclick="openSettings()">⚙️</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <!-- LEFT COLUMN: CALENDAR -->
+    <div>
+      <div class="box">
+        <div class="calendar-head">
+          <button class="btn btn-outline" onclick="changeMonth(-1)">Prev</button>
+          <h3 id="monthLabel" style="margin:0">Bulan Tahun</h3>
+          <button class="btn btn-outline" onclick="changeMonth(1)">Next</button>
+        </div>
+        <div class="calendar" id="calendar"></div>
+        <div style="margin-top:10px;font-size:0.8rem;color:#666;display:flex;gap:10px;flex-wrap:wrap">
+          <span style="display:flex;align-items:center"><div style="width:10px;height:10px;background:var(--hadir);margin-right:4px"></div> Hadir</span>
+          <span style="display:flex;align-items:center"><div style="width:10px;height:10px;background:var(--half);margin-right:4px"></div> 1/2 Hari</span>
+          <span style="display:flex;align-items:center"><div style="width:10px;height:10px;background:var(--holiday);margin-right:4px"></div> Libur/Lembur</span>
+          <span style="display:flex;align-items:center"><div style="width:10px;height:10px;background:var(--absen);margin-right:4px"></div> Absen</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: SUMMARY & EXTRAS -->
+    <div>
+      <div class="box">
+        <h3 style="margin-top:0;border-bottom:1px solid #eee;padding-bottom:8px">Ringkasan Gaji</h3>
+        <table class="simple">
+          <tr><td>Gaji Pokok <small id="lblPokok"></small></td><td class="money" id="valPokok">0</td></tr>
+          <tr><td>Uang Makan <small id="lblMakan"></small></td><td class="money" id="valMakan">0</td></tr>
+          <tr><td>Lembur <small id="lblLembur"></small></td><td class="money" id="valLembur">0</td></tr>
+          <tr><td>Tunjangan/Bonus</td><td class="money" style="color:green" id="valBonus">0</td></tr>
+          <tr><td>Potongan/Kasbon</td><td class="money" style="color:red" id="valPotongan">0</td></tr>
+          <tr class="total-row"><td>TOTAL DITERIMA</td><td class="money" style="font-size:1.2rem;color:var(--primary)" id="valTotal">0</td></tr>
+        </table>
+      </div>
+
+      <div class="box">
+        <h3 style="margin-top:0;font-size:1rem">Bonus / Potongan</h3>
+        <div style="display:flex;gap:4px;margin-bottom:8px">
+          <input type="text" id="exName" placeholder="Ket (ex: Kasbon)" />
+          <input type="number" id="exVal" placeholder="Rp" style="width:100px" />
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:12px">
+          <button class="btn" style="flex:1;background:#22c55e" onclick="addExtra('plus')">+ Tambah</button>
+          <button class="btn" style="flex:1;background:#ef4444" onclick="addExtra('minus')">- Potong</button>
+        </div>
+        <div id="extraList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- END APP UI -->
+
+<!-- AREA PRINT (Hanya muncul saat diprint) -->
+<div id="print-area">
+  <div class="slip-container">
+    <div class="slip-header">
+      <h2>SLIP GAJI</h2>
+      <div id="printPerusahaan">Laporan Keuangan Pribadi</div>
+    </div>
+    
+    <div class="slip-meta">
+      <div>
+        <strong>Nama:</strong> <span id="printNama">-</span><br>
+        <strong>Periode:</strong> <span id="printPeriode">-</span>
+      </div>
+      <div style="text-align:right">
+        <strong>Tanggal Cetak:</strong> <br> <span id="printDate">-</span>
+      </div>
+    </div>
+
+    <table class="slip-table">
+      <thead>
+        <tr><th>KETERANGAN</th><th style="text-align:right;width:150px">JUMLAH (Rp)</th></tr>
+      </thead>
+      <tbody id="printBody"></tbody>
+      <tfoot>
+        <tr style="background:#eee;font-weight:bold;border-top:2px solid #000">
+          <td style="padding:10px">TOTAL DITERIMA</td>
+          <td style="text-align:right;padding:10px" id="printTotal">0</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="slip-footer">
+      <div class="sign-box">
+        <div>Penerima</div>
+        <div class="sign-space"></div>
+        <div>( ....................... )</div>
+      </div>
+      <div class="sign-box">
+        <div>Mengetahui</div>
+        <div class="sign-space"></div>
+        <div>( ....................... )</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: EDIT DATE -->
+<div id="modalDate" class="modal">
+  <div class="modal-box">
+    <h3 id="mTitle">Edit Tanggal</h3>
+    <label>Status</label>
+    <select id="mStatus">
+      <option value="Hadir">Hadir Full</option>
+      <option value="Half">Setengah Hari (50%)</option>
+      <option value="Tidak">Tidak Hadir / Absen</option>
+    </select>
+    <label>Jam Lembur</label>
+    <input type="number" id="mLembur" placeholder="0" step="0.5" />
+    <div style="text-align:right;margin-top:16px">
+      <button class="btn btn-outline" onclick="closeModal()">Batal</button>
+      <button class="btn" onclick="saveDate()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: SETTINGS -->
+<div id="modalSet" class="modal">
+  <div class="modal-box" style="width:400px">
+    <h3>Pengaturan</h3>
+    <label>Nama Anda</label> <input type="text" id="setNama" />
+    <label>Gaji Pokok (Rp)</label> <input type="number" id="setPokok" />
+    <label>Uang Makan (Rp)</label> <input type="number" id="setMakan" />
+    <label>Upah Lembur/Jam (Rp)</label> <input type="number" id="setLembur" />
+    <hr>
+    <h4>Libur Tetap (MM-DD)</h4>
+    <div id="recurList" style="max-height:100px;overflow-y:auto;margin-bottom:8px"></div>
+    <div style="display:flex;gap:4px">
+      <input type="text" id="newRecDate" placeholder="08-17" style="width:60px">
+      <input type="text" id="newRecName" placeholder="Nama">
+      <button class="btn" onclick="addRec()">+</button>
+    </div>
+    <div style="text-align:right;margin-top:16px;display:flex;justify-content:space-between">
+      <button class="btn btn-danger" onclick="resetData()">Reset</button>
+      <div><button class="btn btn-outline" onclick="closeModal()">Tutup</button> <button class="btn" onclick="saveSettings()">Simpan</button></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Gaji v8.1 Logic */
+const LS = { CFG:'gaji_v8_cfg', DATA:'gaji_v8_data', EXTRA:'gaji_v8_extra', REC:'gaji_v8_rec' };
+let config = JSON.parse(localStorage.getItem(LS.CFG)) || { nama:"Karyawan", pokok:80000, makan:20000, lemburVal:15000 };
+let recurring = JSON.parse(localStorage.getItem(LS.REC)) || [{d:"01-01",n:"Tahun Baru"},{d:"05-01",n:"Buruh"},{d:"08-17",n:"RI"},{d:"12-25",n:"Natal"}];
+let attendance = JSON.parse(localStorage.getItem(LS.DATA)) || {};
+let extras = JSON.parse(localStorage.getItem(LS.EXTRA)) || {};
+let now = new Date(); let vMonth = now.getMonth(); let vYear = now.getFullYear();
+let currentCalc = {};
+
+function saveAll(){
+  localStorage.setItem(LS.CFG, JSON.stringify(config));
+  localStorage.setItem(LS.DATA, JSON.stringify(attendance));
+  localStorage.setItem(LS.EXTRA, JSON.stringify(extras));
+  localStorage.setItem(LS.REC, JSON.stringify(recurring));
+}
+function fmt(n){ return parseInt(n).toLocaleString('id-ID'); }
+function getMKey(y,m){ return `${y}-${String(m+1).padStart(2,'0')}`; }
+function getKey(y,m,d){ return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+
+function renderCalendar(){
+  const cal = document.getElementById('calendar'); cal.innerHTML = '';
+  ['Min','Sen','Sel','Rab','Kam','Jum','Sab'].forEach(d => cal.innerHTML += `<div class="day-name">${d}</div>`);
+  const first = new Date(vYear,vMonth,1).getDay();
+  const days = new Date(vYear,vMonth+1,0).getDate();
+  const todayStr = getKey(now.getFullYear(),now.getMonth(),now.getDate());
+  document.getElementById('monthLabel').textContent = new Date(vYear,vMonth,1).toLocaleString('id-ID',{month:'long',year:'numeric'}).toUpperCase();
+  
+  for(let i=0;i<first;i++) cal.innerHTML+=`<div class="cell" style="cursor:default;border:0"></div>`;
+  
+  for(let d=1;d<=days;d++){
+    const k = getKey(vYear,vMonth,d);
+    const isSun = new Date(vYear,vMonth,d).getDay()===0;
+    const rec = recurring.find(r=>r.d===k.substring(5));
+    const data = attendance[k];
+    
+    let cls = isSun||rec ? 'bg-libur' : '';
+    let info = '';
+    if(rec) info += `<div class="tag" style="background:red;color:#fff">${rec.n}</div>`;
+    
+    if(data){
+      if(data.status==='Hadir'){
+        cls = (isSun||rec||data.lembur>0) ? 'bg-libur' : 'bg-hadir';
+        info += `<div class="tag" style="border:1px solid #555">Hadir${data.lembur?`+${data.lembur}h`:''}</div>`;
+      } else if(data.status==='Half'){ cls='bg-half'; info+=`<div class="tag" style="color:#b45309;border:1px solid orange">1/2 Hari</div>`; }
+      else if(data.status==='Tidak'){ cls='bg-absen'; info+=`<div class="tag">Absen</div>`; }
+    }
+    const isToday = k===todayStr?'today':'';
+    const el = document.createElement('div'); el.className=`cell ${cls} ${isToday}`;
+    el.innerHTML=`<div class="d-num" style="${(isSun||rec)?'color:red':''}">${d}</div>${info}`;
+    el.onclick=()=>openEdit(k,d,isSun||rec);
+    cal.appendChild(el);
+  }
+  calculate(); renderExtras();
+}
+
+function calculate(){
+  let cFull=0, cHalf=0, jLembur=0;
+  const days = new Date(vYear,vMonth+1,0).getDate();
+  for(let d=1;d<=days;d++){
+    const k=getKey(vYear,vMonth,d);
+    const data=attendance[k];
+    const isHol=(new Date(vYear,vMonth,d).getDay()===0)||recurring.some(r=>r.d===k.substring(5));
+    if(data){
+      if(data.status==='Hadir'){
+        jLembur += (parseFloat(data.lembur)||0);
+        if(!isHol) cFull++; 
+      } else if(data.status==='Half' && !isHol) cHalf++;
+    }
+  }
+  const tPokok = (cFull*config.pokok) + (cHalf*0.5*config.pokok);
+  const tMakan = (cFull*config.makan) + (cHalf*0.5*config.makan);
+  const tLembur = jLembur*config.lemburVal;
+  
+  let tBonus=0, tPot=0;
+  const list = extras[getMKey(vYear,vMonth)]||[];
+  list.forEach(i=>{ if(i.type==='plus') tBonus+=i.val; else tPot+=i.val; });
+  const total = (tPokok+tMakan+tLembur+tBonus)-tPot;
+
+  document.getElementById('lblPokok').textContent=`(${cFull} Full + ${cHalf} Half)`;
+  document.getElementById('valPokok').textContent=fmt(tPokok);
+  document.getElementById('lblMakan').textContent=`(${cFull+(cHalf*0.5)} hari)`;
+  document.getElementById('valMakan').textContent=fmt(tMakan);
+  document.getElementById('lblLembur').textContent=`(${jLembur} jam)`;
+  document.getElementById('valLembur').textContent=fmt(tLembur);
+  document.getElementById('valBonus').textContent=fmt(tBonus);
+  document.getElementById('valPotongan').textContent=fmt(tPot);
+  document.getElementById('valTotal').textContent="Rp "+fmt(total);
+
+  currentCalc = {pokok:tPokok, makan:tMakan, lembur:tLembur, bonus:tBonus, potong:tPot, total:total, dPokok:cFull+(cHalf*0.5), dLembur:jLembur, list:list};
+}
+
+function renderExtras(){
+  const div=document.getElementById('extraList'); div.innerHTML='';
+  (extras[getMKey(vYear,vMonth)]||[]).forEach((x,i)=>{
+    div.innerHTML += `<div class="extra-item"><div>${x.name}</div><div style="display:flex;gap:8px"><span class="${x.type==='plus'?'amount-plus':'amount-min'}">${x.type==='plus'?'+':'-'} ${fmt(x.val)}</span><button class="btn-danger" style="padding:2px 6px;font-size:0.7rem" onclick="delExtra(${i})">x</button></div></div>`;
+  });
+}
+function addExtra(t){
+  const n=document.getElementById('exName').value, v=parseInt(document.getElementById('exVal').value);
+  if(n&&v){ 
+    const k=getMKey(vYear,vMonth); if(!extras[k]) extras[k]=[];
+    extras[k].push({name:n,val:v,type:t}); saveAll(); renderExtras(); calculate();
+    document.getElementById('exName').value=''; document.getElementById('exVal').value='';
+  }
+}
+function delExtra(i){ const k=getMKey(vYear,vMonth); extras[k].splice(i,1); saveAll(); renderExtras(); calculate(); }
+
+function openEdit(k,d,h){
+  const m=document.getElementById('modalDate'); m.style.display='flex'; m.dataset.key=k;
+  document.getElementById('mTitle').textContent=`Tgl ${d} ${h?'(Libur)':''}`;
+  const dt=attendance[k]||{status:'Hadir',lembur:0};
+  if(!attendance[k] && h) dt.status='Hadir';
+  document.getElementById('mStatus').value=dt.status; document.getElementById('mLembur').value=dt.lembur||'';
+}
+function saveDate(){
+  const k=document.getElementById('modalDate').dataset.key;
+  attendance[k]={status:document.getElementById('mStatus').value, lembur:parseFloat(document.getElementById('mLembur').value)||0};
+  saveAll(); closeModal(); renderCalendar();
+}
+
+function openSettings(){
+  const m=document.getElementById('modalSet'); m.style.display='flex';
+  document.getElementById('setNama').value=config.nama; document.getElementById('setPokok').value=config.pokok;
+  document.getElementById('setMakan').value=config.makan; document.getElementById('setLembur').value=config.lemburVal;
+  renderRecList();
+}
+function saveSettings(){
+  config.nama=document.getElementById('setNama').value; config.pokok=parseInt(document.getElementById('setPokok').value)||0;
+  config.makan=parseInt(document.getElementById('setMakan').value)||0; config.lemburVal=parseInt(document.getElementById('setLembur').value)||0;
+  saveAll(); closeModal(); renderCalendar(); alert("Tersimpan!");
+}
+function renderRecList(){
+  const d=document.getElementById('recurList'); d.innerHTML='';
+  recurring.forEach((r,i)=>d.innerHTML+=`<div style="display:flex;justify-content:space-between;border-bottom:1px solid #eee;padding:4px"><span><b>${r.d}</b> ${r.n}</span><span style="color:red;cursor:pointer" onclick="delRec(${i})">x</span></div>`);
+}
+function addRec(){ const d=document.getElementById('newRecDate').value, n=document.getElementById('newRecName').value; if(d&&n){recurring.push({d,n});saveAll();renderRecList();} }
+function delRec(i){ recurring.splice(i,1);saveAll();renderRecList(); }
+function closeModal(){ document.querySelectorAll('.modal').forEach(m=>m.style.display='none'); }
+function changeMonth(n){ vMonth+=n; if(vMonth>11){vMonth=0;vYear++} if(vMonth<0){vMonth=11;vYear--} renderCalendar(); }
+function resetData(){ if(confirm("Hapus Semua Data?")) { localStorage.clear(); location.reload(); } }
+
+/* PRINT FUNCTION FIXED */
+function printSlip(){
+  document.getElementById('printNama').textContent = config.nama;
+  document.getElementById('printPeriode').textContent = document.getElementById('monthLabel').textContent;
+  document.getElementById('printDate').textContent = new Date().toLocaleDateString('id-ID',{day:'numeric',month:'long',year:'numeric'});
+  
+  const b = document.getElementById('printBody'); b.innerHTML='';
+  const add = (l,v) => b.innerHTML += `<tr><td>${l}</td><td style="text-align:right">${fmt(v)}</td></tr>`;
+  
+  if(currentCalc.pokok>0) add(`Gaji Pokok (${currentCalc.dPokok} hari)`, currentCalc.pokok);
+  if(currentCalc.makan>0) add(`Uang Makan/Transport`, currentCalc.makan);
+  if(currentCalc.lembur>0) add(`Uang Lembur (${currentCalc.dLembur} jam)`, currentCalc.lembur);
+  (currentCalc.list||[]).forEach(x => {
+    const val = x.type==='minus' ? -Math.abs(x.val) : x.val;
+    add(x.name + (x.type==='minus'?' (Potongan)':''), val);
+  });
+  
+  document.getElementById('printTotal').textContent = "Rp " + fmt(currentCalc.total);
+  
+  // Trigger Print Browser
+  window.print();
+}
+
+window.onclick = e => { if(e.target.classList.contains('modal')) closeModal(); };
+renderCalendar();
+</script>
+</body>
+</html>
